@@ -1,0 +1,26 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Bharweli Working AOI",
+        "district": "Balaghat",
+        "state": "Madhya Pradesh",
+        "country": "India"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [80.20, 21.82],
+            [80.27, 21.82],
+            [80.27, 21.88],
+            [80.20, 21.88],
+            [80.20, 21.82]
+          ]
+        ]
+      }
+    }
+  ]
+}

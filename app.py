@@ -203,18 +203,40 @@ with col2:
             st.session_state.score = None
             st.rerun()
 
+    if "band_8" not in st.session_state:
+        st.session_state.band_8 = 1500
+    if "band_11" not in st.session_state:
+        st.session_state.band_11 = 2100
+    if "band_12" not in st.session_state:
+        st.session_state.band_12 = 1800
+
+    st.write(f"**Current:** Lat {st.session_state.lat:.4f}, Lon {st.session_state.lon:.4f}")
+    st.write(f"**Bands:** B8={st.session_state.band_8} | B11={st.session_state.band_11} | B12={st.session_state.band_12}")
+
     st.divider()
-    b8 = st.slider("Band 8 (NIR)", 0, 4000, 1500)
-    b11 = st.slider("Band 11 (SWIR1)", 0, 5000, 2100)
-    b12 = st.slider("Band 12 (SWIR2)", 0, 4500, 1800)
+
+    st.write("**Band Values** (type or load from test samples)")
+    ib1, ib2, ib3 = st.columns(3)
+    nb8_text = ib1.text_input("Band 8 (NIR)", value=str(st.session_state.band_8))
+    nb11_text = ib2.text_input("Band 11 (SWIR1)", value=str(st.session_state.band_11))
+    nb12_text = ib3.text_input("Band 12 (SWIR2)", value=str(st.session_state.band_12))
+    try:
+        nb8 = int(float(nb8_text))
+        nb11 = int(float(nb11_text))
+        nb12 = int(float(nb12_text))
+    except:
+        nb8, nb11, nb12 = st.session_state.band_8, st.session_state.band_11, st.session_state.band_12
 
     if st.button("Run Analysis", type="primary"):
         try:
             r = requests.post(f"{BACKEND}/api/v1/spatial/predict-point",
-                json={"latitude": lat, "longitude": lon, "band_8": b8, "band_11": b11, "band_12": b12}, timeout=10).json()
+                json={"latitude": lat, "longitude": lon, "band_8": nb8, "band_11": nb11, "band_12": nb12}, timeout=10).json()
             st.session_state.score = r["prospectivity_score"]
             st.session_state.lat = lat
             st.session_state.lon = lon
+            st.session_state.band_8 = nb8
+            st.session_state.band_11 = nb11
+            st.session_state.band_12 = nb12
 
             sc = r["prospectivity_score"]
             if sc >= 75: st.success(f"Score: {sc}% - {r['recommendation']}")
@@ -224,7 +246,8 @@ with col2:
             st.write(f"Confidence: {r['confidence']} | Risk: {r['risk_level']}")
 
             st.session_state.history.append({"time": pd.Timestamp.now().strftime("%H:%M:%S"),
-                "lat": lat, "lon": lon, "score": sc, "conf": r["confidence"]})
+                "lat": lat, "lon": lon, "band_8": nb8, "band_11": nb11, "band_12": nb12,
+                "score": sc, "conf": r["confidence"]})
             pd.DataFrame(st.session_state.history).to_csv(HISTORY_FILE, index=False)
             st.rerun()
         except Exception as e:
@@ -301,7 +324,7 @@ with t4:
         st.error("test_set_20.csv not found in project folder.")
     else:
         test_df = load_test_csv()
-        st.info(f"**{len(deposits)} deposits** used for training (80%) | **{len(test_df)} samples** held out for testing (20%)")
+        st.info(f"**{len(deposits)} deposits** used for training (80%, Balaghat MP) | **{len(test_df)} samples** held out for testing (20%, Joda Odisha)")
 
         if MODEL is not None:
             st.success(f"Loaded model: {model_path} ({MODEL_TYPE})")
@@ -390,6 +413,12 @@ with t4:
         sel_idx = sample_labels.index(selected)
         sel_row = test_df.iloc[sel_idx]
 
+        st.session_state.lat = float(sel_row['latitude'])
+        st.session_state.lon = float(sel_row['longitude'])
+        st.session_state.band_8 = int(float(sel_row['band_8']))
+        st.session_state.band_11 = int(float(sel_row['band_11']))
+        st.session_state.band_12 = int(float(sel_row['band_12']))
+
         sc1, sc2 = st.columns(2)
         with sc1:
             st.write(f"**Latitude:** {sel_row['latitude']:.6f}")
@@ -409,15 +438,9 @@ with t4:
             st.write(f"**Ratio 11/12:** {sel_row['ratio_11_12']:.4f}")
             st.write(f"**Norm Diff:** {sel_row['norm_diff']:.6f}")
 
-        if st.button("Load on Main Map", key="load_sample"):
-            st.session_state.lat = sel_row["latitude"]
-            st.session_state.lon = sel_row["longitude"]
-            st.session_state.score = None
-            st.rerun()
-
         st.divider()
         st.write("**All Predictions on Map**")
-        val_map = folium.Map(location=[21.8, 80.18], zoom_start=11, tiles="OpenStreetMap")
+        val_map = folium.Map(location=[22.25, 85.45], zoom_start=11, tiles="OpenStreetMap")
         for _, row in test_df.iterrows():
             correct = row["actual_label"] == row["predicted"]
             color = "green" if correct else "red"

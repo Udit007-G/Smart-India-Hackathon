@@ -1,9 +1,29 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+.venv/
+venv/
+.env
+
+# Data (Sentinel-2 rasters, 520MB — exceed GitHub 100MB limit)
+data/
+outputs/
+*.jp2
+*.tif
+
+# Duplicate model / artifacts
+sih_manganese_model (1).pkl
 frontend.zip
+scan_history.csv
 *.h5
 *.pt
-.env
-scan_history.csv
+
+# Binary deck — not required
+Skyminers.pptx
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/

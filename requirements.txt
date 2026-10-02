@@ -17,3 +17,6 @@ statsmodels
 scikit-learn
 joblib
 streamlit
+rasterio
+geopandas
+matplotlib
