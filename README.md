@@ -186,16 +186,7 @@ and `*_SCL_20m.jp2`, masks them to the AOI, and plots NDVI / NDMI side by side.
 
 ---
 
-## Not in this repository
-
-| Path | Why |
-|---|---|
-| `data/` | Sentinel-2 `.jp2` bands, ~520 MB — exceeds GitHub's 100 MB file limit |
-| `outputs/` | Generated `.tif` rasters; regenerable via `process_indices.py` |
-| `.venv/` | Virtual environment |
-| `Skyminers.pptx` | Slide deck |
-
-Download imagery from the
+## Download imagery from the
 [Copernicus Data Space Ecosystem](https://dataspace.copernicus.eu/) using AOI
 `bharweli_aoi.geojson` (Bharweli, Balaghat) and drop the bands into `data/`.
 
