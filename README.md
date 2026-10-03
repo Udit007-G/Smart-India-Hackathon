@@ -60,9 +60,9 @@ Holdout results measured on `test_set_20.csv` (52 samples):
 
 ```
 Smart-India-Hackathon/
-├── app.py                    # Streamlit dashboard (frontend)
+├── app.py                    # Dual-mode entrypoint (FastAPI ASGI instance + Streamlit dashboard)
 ├── backend/
-│   └── mock_api.py           # FastAPI service (port 8000)
+│   └── mock_api.py           # FastAPI service, interactive web dashboard & ML inference
 ├── sih_manganese_model.pkl   # Trained RandomForest (joblib)
 ├── test_set_20.csv           # 52 held-out samples, Joda Odisha belt
 ├── bharweli_aoi.geojson      # Area of interest boundary
@@ -115,12 +115,32 @@ Then either double-click **`run.bat`**, or:
 | Dashboard | http://localhost:8501 |
 | OpenAPI docs | http://localhost:8000/docs |
 
-Manual start:
-
 ```bash
 python -m uvicorn backend.mock_api:app --reload --port 8000
 streamlit run app.py --server.port 8501
 ```
+
+---
+
+## Deployment
+
+The application is structured to deploy smoothly on any cloud platform:
+
+### 1. Cloud PaaS (Hugging Face Spaces, Render, Railway, Koyeb, Docker)
+When deployed to platforms expecting a **FastAPI** application, `app.py` exposes a top-level `app` FastAPI instance:
+```bash
+uvicorn app:app --host 0.0.0.0 --port 8000
+```
+- **Web Dashboard:** Opening `/` in a browser displays the full interactive exploration dashboard (Leaflet map, AI inference console, scenario simulator, and validation inspector).
+- **REST API:** Standard JSON endpoints are available at `/api/v1/...`.
+- **Interactive OpenAPI Docs:** Available at `/docs`.
+
+### 2. Streamlit Cloud
+When deployed to **Streamlit Community Cloud** or run via `streamlit run app.py`:
+```bash
+streamlit run app.py
+```
+- The script automatically detects the Streamlit runner and renders the Streamlit dashboard with resilient fallbacks that work seamlessly even if the external backend service is not running.
 
 ---
 

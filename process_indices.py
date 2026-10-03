@@ -12,7 +12,9 @@ import matplotlib.pyplot as plt
 # PATHS
 # ============================================================
 
-folder = Path(r"C:\Users\HP\Desktop\Assignments\SIH\data")
+folder = Path(__file__).resolve().parent / "data"
+if not folder.exists():
+    folder = Path(r"C:\Users\HP\Desktop\Assignments\SIH\data")
 
 aoi_file = Path("bharweli_aoi.geojson")
 
