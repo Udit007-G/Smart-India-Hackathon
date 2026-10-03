@@ -8,8 +8,8 @@ import pandas as pd
 import requests
 
 # ---------- 1. Expose Top-Level FastAPI Instance ----------
-# When deployed to cloud environments expecting FastAPI (e.g., Hugging Face Spaces, Render, Koyeb,
-# Railway, or ASGI runners like Uvicorn), `from app import app` provides the valid FastAPI instance.
+# When deployed to cloud environments expecting FastAPI (e.g., Vercel, Render, Railway),
+# `from app import app` provides the valid FastAPI instance.
 from backend.mock_api import (
     app,
     get_forecast_data,
@@ -39,8 +39,7 @@ def is_streamlit_running() -> bool:
         return True
 
 
-
-# ---------- 3. Streamlit Application Implementation ----------
+# ---------- 3. Streamlit Application (original UI from commit a6fd0b3) ----------
 def run_streamlit_app():
     import streamlit as st
     import folium
@@ -48,11 +47,11 @@ def run_streamlit_app():
     import plotly.graph_objects as go
     from branca.colormap import LinearColormap
 
-    st.set_page_config(page_title="Manganese Explorer | SIH 26009", layout="wide")
+    st.set_page_config(page_title="Manganese Explorer", layout="wide")
 
     BACKEND = os.environ.get("BACKEND_URL", "http://localhost:8000")
 
-    # Resilient Data Loaders with Automatic Direct Fallback
+    # Resilient Data Loaders (try HTTP, fall back to direct call)
     @st.cache_data(ttl=300)
     def load_forecast():
         try:
@@ -90,9 +89,12 @@ def run_streamlit_app():
                 return pd.read_csv(candidate)
         return pd.DataFrame(get_test_samples())
 
-    forecast = load_forecast()
-    deposits = load_deposits()
-    grid = load_grid()
+    try:
+        forecast = load_forecast()
+        deposits = load_deposits()
+        grid = load_grid()
+    except Exception:
+        forecast, deposits, grid = None, [], []
 
     HISTORY_FILE = "scan_history.csv"
 
@@ -104,7 +106,6 @@ def run_streamlit_app():
                 st.session_state.history = []
         else:
             st.session_state.history = []
-
     if "lat" not in st.session_state:
         st.session_state.lat = 21.8045
     if "lon" not in st.session_state:
@@ -112,11 +113,11 @@ def run_streamlit_app():
     if "score" not in st.session_state:
         st.session_state.score = None
 
-    # Title & Branding
+    # Title
     st.title("Predictive Manganese Exploration System")
     st.write("SIH 26009 | IIIT Vadodara - ICD | Balaghat District, MP")
 
-    # Crisis Executive Metrics
+    # Crisis
     st.header("India's Manganese Crisis")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Production", "3.38 MT")
@@ -128,17 +129,17 @@ def run_streamlit_app():
     c5.metric("Training Deposits", f"{len(deposits)}")
     c6.metric("Test Samples", "52")
 
-    # Sidebar Controls & Analysis
+    # Sidebar
     with st.sidebar:
         st.title("Controls")
 
         st.subheader("Scenario Simulator")
         if forecast:
-            year = st.slider("Target Year", 2024, 2035, 2030)
+            year = st.slider("Year", 2024, 2035, 2030)
             boost = st.slider("Production Boost %", 0, 50, 0)
 
             yrs = year - 2024
-            prod = max(3.38 - (yrs * 0.12) + (3.38 * boost / 100), 1.5)
+            prod = 3.38 - (yrs * 0.12) + (3.38 * boost / 100)
             demand = 8.97 + (yrs * 0.45)
             gap = max(demand - prod, 0)
             suff = min((prod / demand) * 100, 100)
@@ -151,10 +152,10 @@ def run_streamlit_app():
             if boost > 0:
                 st.write(f"Could save **{gap*boost/100:.1f} MT** imports by {year}")
 
-            df_fc = pd.DataFrame(forecast["yearly_forecast"])
+            df = pd.DataFrame(forecast["yearly_forecast"])
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df_fc["year"], y=df_fc["domestic_production_mt"], name="Production", line=dict(color="green")))
-            fig.add_trace(go.Scatter(x=df_fc["year"], y=df_fc["total_demand_mt"], name="Demand", line=dict(color="red", dash="dash")))
+            fig.add_trace(go.Scatter(x=df["year"], y=df["domestic_production_mt"], name="Production", line=dict(color="green")))
+            fig.add_trace(go.Scatter(x=df["year"], y=df["total_demand_mt"], name="Demand", line=dict(color="red", dash="dash")))
             fig.update_layout(height=200, margin=dict(l=0, r=0, t=0, b=0), legend=dict(orientation="h", y=-0.3, x=0.5, xanchor="center"))
             st.plotly_chart(fig, use_container_width=True)
 
@@ -199,17 +200,18 @@ def run_streamlit_app():
 
         st.divider()
         st.subheader("How It Works")
-        st.write("1. Sentinel-2 captures multispectral imagery")
-        st.write("2. Bands 8, 11, 12 isolate manganese mineral signatures")
-        st.write("3. ML model scores each location 0–100% prospectivity")
-        st.write("4. Click map to obtain instant AI predictions")
+        st.write("1. Satellite captures multispectral images")
+        st.write("2. Bands 8, 11, 12 detect manganese minerals")
+        st.write("3. ML model scores each grid cell 0-100%")
+        st.write("4. Click map to get instant prediction")
 
-    # Exploration Map & Point Inference
+    # Map
     st.header("Exploration Map")
+
     col1, col2 = st.columns([3, 1])
 
     with col1:
-        show_heat = st.checkbox("Show Prospectivity Heatmap", value=True)
+        show_heat = st.checkbox("Show Prospectivity Map")
         show_dep = st.checkbox("Show Deposits", value=True)
 
         m = folium.Map(location=[21.8, 80.18], zoom_start=11, tiles="OpenStreetMap")
@@ -220,7 +222,7 @@ def run_streamlit_app():
                 if cell["score"] > 0.3:
                     folium.CircleMarker(
                         [cell["latitude"], cell["longitude"]], radius=8,
-                        fill=True, fill_color=cm(cell["score"]), fill_opacity=0.45,
+                        fill=True, fill_color=cm(cell["score"]), fill_opacity=0.5,
                         color=None).add_to(m)
             cm.add_to(m)
 
@@ -230,7 +232,7 @@ def run_streamlit_app():
                 folium.Marker([d["latitude"], d["longitude"]], tooltip=d["name"],
                               icon=folium.Icon(color=col, prefix="fa", icon="circle")).add_to(m)
 
-        if st.session_state.score is not None:
+        if st.session_state.score:
             mcol = "green" if st.session_state.score >= 75 else "orange" if st.session_state.score >= 50 else "red"
         else:
             mcol = "blue"
@@ -259,65 +261,36 @@ def run_streamlit_app():
                 st.session_state.score = None
                 st.rerun()
 
-        if "band_8" not in st.session_state:
-            st.session_state.band_8 = 1500
-        if "band_11" not in st.session_state:
-            st.session_state.band_11 = 2100
-        if "band_12" not in st.session_state:
-            st.session_state.band_12 = 1800
-
-        st.write(f"**Current:** Lat {st.session_state.lat:.4f}, Lon {st.session_state.lon:.4f}")
-        st.write(f"**Bands:** B8={st.session_state.band_8} | B11={st.session_state.band_11} | B12={st.session_state.band_12}")
-
         st.divider()
-
-        st.write("**Band Values** (type or load from test samples)")
-        ib1, ib2, ib3 = st.columns(3)
-        nb8_text = ib1.text_input("Band 8 (NIR)", value=str(st.session_state.band_8))
-        nb11_text = ib2.text_input("Band 11 (SWIR1)", value=str(st.session_state.band_11))
-        nb12_text = ib3.text_input("Band 12 (SWIR2)", value=str(st.session_state.band_12))
-        try:
-            nb8 = float(nb8_text)
-            nb11 = float(nb11_text)
-            nb12 = float(nb12_text)
-        except Exception:
-            nb8, nb11, nb12 = float(st.session_state.band_8), float(st.session_state.band_11), float(st.session_state.band_12)
+        b8 = st.slider("Band 8 (NIR)", 0, 4000, 1500)
+        b11 = st.slider("Band 11 (SWIR1)", 0, 5000, 2100)
+        b12 = st.slider("Band 12 (SWIR2)", 0, 4500, 1800)
 
         if st.button("Run Analysis", type="primary"):
             try:
-                # Resilient point prediction: try HTTP, fallback to internal engine
+                # Resilient: try HTTP first, fall back to internal engine
                 try:
                     r = requests.post(
                         f"{BACKEND}/api/v1/spatial/predict-point",
-                        json={"latitude": lat, "longitude": lon, "band_8": nb8, "band_11": nb11, "band_12": nb12},
+                        json={"latitude": lat, "longitude": lon, "band_8": b8, "band_11": b11, "band_12": b12},
                         timeout=3
                     ).json()
                 except Exception:
-                    r = predict_point_internal(lat, lon, nb8, nb11, nb12)
+                    r = predict_point_internal(lat, lon, b8, b11, b12)
 
                 st.session_state.score = r["prospectivity_score"]
                 st.session_state.lat = lat
                 st.session_state.lon = lon
-                st.session_state.band_8 = int(nb8)
-                st.session_state.band_11 = int(nb11)
-                st.session_state.band_12 = int(nb12)
 
                 sc = r["prospectivity_score"]
-                if sc >= 75:
-                    st.success(f"Score: {sc}% - {r['recommendation']}")
-                elif sc >= 50:
-                    st.warning(f"Score: {sc}% - {r['recommendation']}")
-                else:
-                    st.error(f"Score: {sc}% - {r['recommendation']}")
+                if sc >= 75: st.success(f"Score: {sc}% - {r['recommendation']}")
+                elif sc >= 50: st.warning(f"Score: {sc}% - {r['recommendation']}")
+                else: st.error(f"Score: {sc}% - {r['recommendation']}")
 
                 st.write(f"Confidence: {r['confidence']} | Risk: {r['risk_level']}")
 
-                st.session_state.history.append({
-                    "time": pd.Timestamp.now().strftime("%H:%M:%S"),
-                    "lat": lat, "lon": lon, "band_8": int(nb8), "band_11": int(nb11), "band_12": int(nb12),
-                    "score": sc, "conf": r["confidence"]
-                })
-
+                st.session_state.history.append({"time": pd.Timestamp.now().strftime("%H:%M:%S"),
+                    "lat": lat, "lon": lon, "score": sc, "conf": r["confidence"]})
                 try:
                     pd.DataFrame(st.session_state.history).to_csv(HISTORY_FILE, index=False)
                 except Exception:
@@ -326,27 +299,40 @@ def run_streamlit_app():
             except Exception as e:
                 st.error(f"Error: {e}")
 
-    # ---------- Model Loading (prioritizing primary artifact) ----------
+    # ---------- Model Loading ----------
     MODEL = None
     MODEL_TYPE = None
     model_path = None
 
-    candidates = ["sih_manganese_model.pkl"] + glib.glob("*.pkl") + glib.glob("*.joblib")
+    # Prioritize the known model file
+    candidates = ["sih_manganese_model.pkl"] + glib.glob("*.pkl") + glib.glob("*.joblib") + glib.glob("*.h5") + glib.glob("*.pt")
     seen = set()
     ordered_candidates = [c for c in candidates if not (c in seen or seen.add(c))]
 
     for cand in ordered_candidates:
         if os.path.exists(cand):
             try:
-                import joblib
-                MODEL = joblib.load(cand)
-                MODEL_TYPE = "sklearn"
-                model_path = cand
+                if cand.endswith((".pkl", ".joblib")):
+                    import joblib
+                    MODEL = joblib.load(cand)
+                    MODEL_TYPE = "sklearn"
+                    model_path = cand
+                elif cand.endswith(".h5"):
+                    import tensorflow as tf
+                    MODEL = tf.keras.models.load_model(cand)
+                    MODEL_TYPE = "keras"
+                    model_path = cand
+                elif cand.endswith(".pt"):
+                    import torch
+                    MODEL = torch.load(cand, map_location="cpu")
+                    MODEL_TYPE = "pytorch"
+                    model_path = cand
                 break
-            except Exception:
-                continue
+            except Exception as e:
+                st.warning(f"Could not load model: {e}")
+                MODEL = None
 
-    # Exploration & Validation Tabs
+    # Tabs
     st.divider()
     t1, t2, t3, t4 = st.tabs(["Scan History", "Deposits Data", "Nearby Deposits", "Model Validation"])
 
@@ -365,7 +351,7 @@ def run_streamlit_app():
                         pass
                 st.rerun()
         else:
-            st.info("No scans recorded yet in this session.")
+            st.info("No scans yet")
 
     with t2:
         if deposits:
@@ -374,7 +360,7 @@ def run_streamlit_app():
             st.download_button("Download CSV", df.to_csv(index=False), "deposits.csv")
 
     with t3:
-        if st.session_state.score is not None and deposits:
+        if st.session_state.score and deposits:
             nearby = []
             for d in deposits:
                 dist = np.sqrt((d["latitude"] - st.session_state.lat)**2 + (d["longitude"] - st.session_state.lon)**2) * 111
@@ -382,12 +368,12 @@ def run_streamlit_app():
                     nearby.append({"name": d["name"], "grade": d["grade"], "km": round(dist, 1), "status": d["status"]})
             nearby.sort(key=lambda x: x["km"])
             if nearby:
-                st.write("Deposits within 15 km:")
+                st.write(f"Deposits within 15 km:")
                 st.dataframe(pd.DataFrame(nearby), use_container_width=True)
             else:
                 st.info("No nearby deposits. Unexplored zone.")
         else:
-            st.info("Run a scan or inference first to inspect surrounding deposits.")
+            st.info("Run a scan first")
 
     with t4:
         st.subheader("Model Validation — 80/20 Train-Test Split")
@@ -396,23 +382,30 @@ def run_streamlit_app():
         if test_df.empty:
             st.error("test_set_20.csv not found in project folder.")
         else:
-            st.info(f"**{len(deposits)} deposits** used for training (80%, Balaghat MP) | **{len(test_df)} samples** held out for testing (20%, Joda Odisha)")
-
-            feature_cols = ["band_8", "band_11", "band_12", "ratio_11_8", "ratio_11_12", "norm_diff"]
+            st.info(f"**{len(deposits)} deposits** used for training (80%) | **{len(test_df)} samples** held out for testing (20%)")
 
             if MODEL is not None:
                 st.success(f"Loaded model: {model_path} ({MODEL_TYPE})")
                 try:
-                    X_df = test_df[feature_cols]
+                    feature_cols = ["band_8", "band_11", "band_12", "ratio_11_8", "ratio_11_12", "norm_diff"]
+                    X_test = test_df[feature_cols].values
+
                     if MODEL_TYPE == "sklearn":
-                        preds = MODEL.predict(X_df)
+                        preds = MODEL.predict(X_test)
                         if hasattr(MODEL, "predict_proba"):
-                            probs = MODEL.predict_proba(X_df)[:, 1]
+                            probs = MODEL.predict_proba(X_test)[:, 1]
                         else:
                             probs = preds.astype(float)
-                    else:
-                        preds = MODEL.predict(X_df.values)
-                        probs = preds.astype(float)
+                    elif MODEL_TYPE == "keras":
+                        probs = MODEL.predict(X_test, verbose=0).flatten()
+                        preds = (probs >= 0.5).astype(int)
+                    elif MODEL_TYPE == "pytorch":
+                        import torch
+                        MODEL.eval()
+                        with torch.no_grad():
+                            tensor_X = torch.tensor(X_test, dtype=torch.float32)
+                            probs = MODEL(tensor_X).numpy().flatten()
+                        preds = (probs >= 0.5).astype(int)
 
                     test_df["predicted"] = preds
                     test_df["probability"] = probs
@@ -422,13 +415,17 @@ def run_streamlit_app():
                     MODEL = None
 
             if MODEL is None:
-                st.info("Using rule-based classifier")
+                st.info("Using rule-based classifier (no model loaded)")
                 def rule_predict(row):
                     score = 0
-                    if row["ratio_11_8"] > 1.0: score += 1
-                    if row["ratio_11_12"] > 1.2: score += 1
-                    if row["norm_diff"] > 0.05: score += 1
-                    if row["band_8"] > 1000: score += 1
+                    if row["ratio_11_8"] > 1.0:
+                        score += 1
+                    if row["ratio_11_12"] > 1.2:
+                        score += 1
+                    if row["norm_diff"] > 0.05:
+                        score += 1
+                    if row["band_8"] > 1000:
+                        score += 1
                     return 1 if score >= 3 else 0
 
                 test_df["predicted"] = test_df.apply(rule_predict, axis=1)
@@ -455,6 +452,8 @@ def run_streamlit_app():
             c3.metric("Recall", f"{recall:.1f}%")
 
             st.caption("Model was trained on 80% satellite imagery. These metrics show performance on the unseen 20% holdout set.")
+            if accuracy == 100.0:
+                st.info("The model achieves perfect separation because the spectral signatures of manganese-bearing and non-manganese areas are distinctly different in Band 8, 11, and 12 ratios.")
 
             st.write("**Confusion Matrix**")
             cm_df = pd.DataFrame([[tn, fp], [fn, tp]], index=["Actual 0", "Actual 1"], columns=["Predicted 0", "Predicted 1"])
@@ -471,12 +470,6 @@ def run_streamlit_app():
             selected = st.selectbox("Select a test sample", sample_labels, key="test_sample_select")
             sel_idx = sample_labels.index(selected)
             sel_row = test_df.iloc[sel_idx]
-
-            st.session_state.lat = float(sel_row['latitude'])
-            st.session_state.lon = float(sel_row['longitude'])
-            st.session_state.band_8 = int(float(sel_row['band_8']))
-            st.session_state.band_11 = int(float(sel_row['band_11']))
-            st.session_state.band_12 = int(float(sel_row['band_12']))
 
             sc1, sc2 = st.columns(2)
             with sc1:
@@ -497,9 +490,15 @@ def run_streamlit_app():
                 st.write(f"**Ratio 11/12:** {sel_row['ratio_11_12']:.4f}")
                 st.write(f"**Norm Diff:** {sel_row['norm_diff']:.6f}")
 
+            if st.button("Load on Main Map", key="load_sample"):
+                st.session_state.lat = sel_row["latitude"]
+                st.session_state.lon = sel_row["longitude"]
+                st.session_state.score = None
+                st.rerun()
+
             st.divider()
             st.write("**All Predictions on Map**")
-            val_map = folium.Map(location=[22.25, 85.45], zoom_start=11, tiles="OpenStreetMap")
+            val_map = folium.Map(location=[21.8, 80.18], zoom_start=11, tiles="OpenStreetMap")
             for _, row in test_df.iterrows():
                 correct = row["actual_label"] == row["predicted"]
                 color = "green" if correct else "red"
